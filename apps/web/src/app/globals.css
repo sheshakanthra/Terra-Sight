@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* TerraSight is a dark, data-forward surface. Colour carries meaning here:
+   green/amber/red are reserved for field health severity and are never
+   decorative. */
+:root {
+  --background: #0b0f0e;
+  --surface: #131a18;
+  --border: #24302d;
+  --foreground: #e8efec;
+  --muted: #8fa39d;
+
+  --healthy: #3fb950;
+  --watch: #d29922;
+  --stress: #f85149;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-healthy: var(--healthy);
+  --color-watch: var(--watch);
+  --color-stress: var(--stress);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
