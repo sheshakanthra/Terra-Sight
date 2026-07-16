@@ -51,7 +51,17 @@ class RefreshResponse(BaseModel):
     scenes_found: int
     dates_processed: int
     valid_dates: int
+    active_alerts: int
     observations: list[ObservationSummaryResponse]
+
+
+class AlertResponse(BaseModel):
+    zone: str
+    type: str
+    severity: str
+    evidence: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
 
 
 class ObservationDetail(BaseModel):

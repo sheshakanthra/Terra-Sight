@@ -43,3 +43,15 @@
 - Verification: build ✅ types ✅ (tsc + mypy strict, 16 files) lint ✅ (eslint + ruff) tests 84/84 ✅ runtime ✅ acceptance ✅
   - Imagery core proven via a real-module dry-run (6 valid dates, NDVI 0.51-0.77). Full live end-to-end 13/13: refresh→persist→reload, overlay publicly fetchable + georeferenced, cooldown 429, RLS isolation. Throwaway users + storage objects cleaned up.
 - Risks / notes for next phase: Phase 3 (trend/alert engine) is pure-function territory with mandatory unit tests and needs no new credentials or migration beyond an `alerts` table. Six valid dates over ~40 days is a healthy trend window. The two 61.2%-valid dates (tile-edge partial coverage) are legitimately included — Phase 3 rules should tolerate varying valid_pct across observations.
+
+## Phase 3 — Trends & alert engine ✅
+- Shipped: pure trend engine (app/alerts/engine.py) — linear-fit relative decline over the last 4-6 valid observations, gated by "current NDVI below the series' own median", severity tiers (low/medium/high), and distinct field_decline / zone_decline types with 3x3 zone labels (NW..SE).
+- Shipped: idempotent alert persistence (app/alerts/store.py) — unique(field_id,zone,type) upsert plus clear-stale, so a refresh never duplicates and never strands a resolved alert; created_at preserved as first-seen. Evaluation runs after observations persist in the refresh flow; its failure does not fail the refresh.
+- Shipped: migration 0003 (alerts + RLS), GET /fields/{id}/alerts, active_alerts on the refresh response.
+- Key decisions:
+  - Linear fit (not raw first-vs-last) for decline magnitude — robust to the varying valid_pct across dates.
+  - "Own median" applied per series (field vs field median, zone vs zone median), so a naturally drier zone doesn't alert for being itself.
+- Verification: types ✅ (mypy strict, 19 files) lint ✅ (ruff) tests 106/106 ✅ acceptance ✅
+  - 17 engine unit tests (types, severities, zero-alert healthy/rising, below-median guard, insufficient data, window cap, zone localization, determinism) + 5 store idempotency tests.
+  - Live integration 7/7: the real declining field produced field_decline (medium, 29.4%/38d) + 7 localized zone alerts with evidence; idempotent against the live unique constraint; RLS isolation held.
+- Risks / notes for next phase: Phase 4 (weather) adds Open-Meteo (keyless) at the field centroid and escalates alert severity + tags likely_water_stress when active decline meets a dry 7-day forecast; it writes rain_next_7d_mm into alert evidence, so it will extend the alert-evaluation step (store.py) rather than the imagery pipeline. No new migration needed — evidence is jsonb. Cache weather 6h per field.

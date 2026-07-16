@@ -14,12 +14,14 @@ from postgrest.exceptions import APIError
 from shapely.errors import ShapelyError
 from shapely.geometry import mapping, shape
 
+from app.alerts.store import evaluate_and_store_alerts
 from app.auth import CurrentUser
 from app.config import get_settings
 from app.geometry import GeometryError, validate_and_measure
 from app.imagery.pipeline import OVERLAY_BUCKET, refresh_field
 from app.imagery.stac import StacError
 from app.schemas import (
+    AlertResponse,
     FieldCreate,
     FieldResponse,
     ObservationDetail,
@@ -205,6 +207,14 @@ async def refresh(field_id: UUID, user: CurrentUser) -> RefreshResponse:
             detail="Could not reach the satellite catalog. Please try again shortly.",
         ) from exc
 
+    # Rules decide alerts from the freshly-persisted observations. A failure here
+    # must not fail the refresh itself — the imagery is already saved.
+    try:
+        active_alerts = await evaluate_and_store_alerts(client, str(field_id))
+    except APIError as exc:
+        logger.warning("alert evaluation failed for field %s: %s", field_id, exc.message)
+        active_alerts = []
+
     # Stamp the cooldown only after a successful run, so a failed refresh does
     # not lock the field for ten minutes.
     try:
@@ -221,6 +231,7 @@ async def refresh(field_id: UUID, user: CurrentUser) -> RefreshResponse:
         scenes_found=summary.scenes_found,
         dates_processed=summary.dates_processed,
         valid_dates=summary.valid_dates,
+        active_alerts=len(active_alerts),
         observations=[
             ObservationSummaryResponse(
                 date=obs.date,
@@ -277,3 +288,31 @@ async def list_observations(field_id: UUID, user: CurrentUser) -> list[Observati
             )
         )
     return observations
+
+
+@router.get("/{field_id}/alerts", response_model=list[AlertResponse])
+async def list_alerts(field_id: UUID, user: CurrentUser) -> list[AlertResponse]:
+    try:
+        client = await create_user_client(user.access_token)
+    except SupabaseNotConfiguredError as exc:
+        raise _UNAVAILABLE from exc
+
+    # Confirms ownership (404 for someone else's field) before listing.
+    await _load_field_row(client, field_id)
+
+    try:
+        result = (
+            await client.table("alerts")
+            .select("zone,type,severity,evidence,created_at,updated_at")
+            .eq("field_id", str(field_id))
+            .order("updated_at", desc=True)
+            .execute()
+        )
+    except APIError as exc:
+        logger.warning("alert list failed: %s", exc.message)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Alerts could not be loaded.",
+        ) from exc
+
+    return [AlertResponse(**row) for row in _as_rows(result.data)]
