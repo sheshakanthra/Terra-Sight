@@ -1,7 +1,7 @@
 # Build State
-current_phase: 2
+current_phase: 3
 status: in_progress
-completed_phases: [0, 1]
+completed_phases: [0, 1, 2]
 decisions_log:
   - 2026-07-15: Phase 0 started on an empty directory; no prior repo state to resume from.
   - 2026-07-15: Pinned Next.js to 15 via create-next-app@15 — `@latest` now installs Next 16, outside the settled stack decision (Appendix B.8).
@@ -26,5 +26,7 @@ decisions_log:
   - 2026-07-16: NDVI overlays live in a public-read Supabase Storage bucket (ndvi-overlays), objects keyed <field_id>/<date>.png; storage RLS lets a user write only under field_ids they own. Public read acceptable: derived colour PNGs pinned by DB-held bounds, not raw imagery. Revisit if fields become shareable.
   - 2026-07-16: Refresh cooldown (1/10min) stamped on fields.last_refreshed_at only after a successful run, so a failed refresh does not lock the field. Enforced in the endpoint (429 + Retry-After).
   - 2026-07-16: Phase 2 imagery CORE acceptance demonstrated against reality via a dry-run of the real modules (no DB): 6 valid dates in 45 days, NDVI medians 0.51-0.77 (cropland range), correct SCL discards on cloudy dates, PNG renders as a clean vegetated NDVI patch with bounds matching the field. Full live end-to-end pending migration 0002.
-blockers:
-  - Phase 2 live acceptance is blocked on applying supabase/migrations/0002_observations.sql (observations table + RLS, ndvi-overlays storage bucket + policies, fields.last_refreshed_at column, fields_geojson view update). DDL + storage-bucket creation cannot be done with the service-role key via PostgREST; needs the SQL editor or a DATABASE_URL. Verified 2026-07-16: observations -> 404, bucket -> 400 (both missing).
+  - 2026-07-16: Migration 0002 first failed on CREATE OR REPLACE VIEW (positional column rule — cannot insert last_refreshed_at before the existing geometry column; Postgres read it as renaming geometry). Fixed by appending last_refreshed_at after geometry. App selects by name, so order is irrelevant to code.
+  - 2026-07-16: Storage upload bug found during live acceptance: create_user_client set the JWT on client.postgrest only, leaving Storage authenticated as anon, so the overlay-write RLS policy (auth.uid()) rejected uploads with 403. Fixed by passing the token as the Authorization header via AsyncClientOptions at client construction, which authenticates PostgREST and Storage alike. Verified against supabase-py source: both sub-clients read options.headers, and create_async_client honours a pre-set Authorization instead of overriding with the anon key.
+  - 2026-07-16: Phase 2 ACCEPTED. Live end-to-end (real API + real Supabase + real Sentinel-2), 13/13: field created, refresh 200 with 6 valid dates (NDVI medians 0.51-0.77), georeferenced bounds, overlay PNG publicly fetchable with bounds surrounding the field, observations reload with 3x3 zonal + field stats, cooldown 429 on immediate re-refresh, RLS isolation (user B 404 on A's observations and refresh). Throwaway users + overlay objects cleaned up. Gate: ruff, mypy strict (16 files), pytest 84/84, web build.
+blockers: []

@@ -29,3 +29,17 @@
 - Verification: build ✅ types ✅ (tsc + mypy strict, 10 files) lint ✅ (eslint + ruff) tests 48/48 ✅ runtime ✅ acceptance ✅
   - Full end-to-end vs live API + live Supabase, two real JWT users, 9/9: persist+reload demonstrated, geometry round-trips, RLS isolation proven (B cannot see A's field), too-small polygon rejected 400. Throwaway users cascade-deleted.
 - Risks / notes for next phase: PostgREST schema cache lags DDL by seconds-to-minutes — expect the same after Phase 2's migrations. Esri basemap is not production-licensed. Phase 2 (imagery pipeline) is the critical path and needs no new credentials — Earth Search STAC and S3 COGs are keyless.
+
+## Phase 2 — Imagery pipeline ✅
+- Shipped: `app/imagery/` — STAC search (Earth Search, sentinel-2-l2a, bbox intersect, 45 days, cloud<60), windowed COG range-reads of red/NIR/SCL (SCL resampled 20m→10m), field rasterization, SCL cloud masking (classes 3/8/9/10/11), the 60% valid-pixel discard gate, NDVI, field stats + 3×3 zonal grid, and a brown→green PNG overlay.
+- Shipped: `GET /fields/{id}/refresh` (search → analyze usable dates → upload overlay → upsert observation) and `GET /fields/{id}/observations`; per-field 1-per-10-min cooldown (429 + Retry-After).
+- Shipped: migration 0002 — observations table with RLS (owner via parent field), public ndvi-overlays storage bucket with ownership-scoped write policies, fields.last_refreshed_at.
+- Shipped: web — a Refresh action per field that pins the NDVI overlay to its geographic bounds on the MapLibre map, with a "N clear dates" notice.
+- Key decisions:
+  - Assets are keyed red/nir/scl (not B04/B08/SCL); SCL is 20m and resampled nearest onto the 10m grid before masking.
+  - Tile-edge robustness: read all bands boundless (fill 0) so partial-coverage tiles don't crash on shape mismatch, and try a date's candidate scenes clearest-first until one passes the gate rather than committing to the lowest-cloud tile (which may not cover the field). Real dry-run: 3 → 6 valid dates.
+  - create_user_client passes the JWT as the Authorization header so Storage (not just PostgREST) acts as the user — required for the overlay-write RLS policy.
+  - Overlays pinned to the rounded pixel-window extent (not the raw bbox) so georeferencing survives window rounding.
+- Verification: build ✅ types ✅ (tsc + mypy strict, 16 files) lint ✅ (eslint + ruff) tests 84/84 ✅ runtime ✅ acceptance ✅
+  - Imagery core proven via a real-module dry-run (6 valid dates, NDVI 0.51-0.77). Full live end-to-end 13/13: refresh→persist→reload, overlay publicly fetchable + georeferenced, cooldown 429, RLS isolation. Throwaway users + storage objects cleaned up.
+- Risks / notes for next phase: Phase 3 (trend/alert engine) is pure-function territory with mandatory unit tests and needs no new credentials or migration beyond an `alerts` table. Six valid dates over ~40 days is a healthy trend window. The two 61.2%-valid dates (tile-edge partial coverage) are legitimately included — Phase 3 rules should tolerate varying valid_pct across observations.

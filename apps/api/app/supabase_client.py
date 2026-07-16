@@ -7,6 +7,7 @@ user request.
 """
 
 from supabase import AsyncClient, create_async_client
+from supabase.lib.client_options import AsyncClientOptions
 
 from app.config import get_settings
 
@@ -31,7 +32,13 @@ async def create_anon_client() -> AsyncClient:
 
 
 async def create_user_client(access_token: str) -> AsyncClient:
-    """A client acting as the signed-in user, subject to RLS."""
-    client = await create_anon_client()
-    client.postgrest.auth(access_token)
-    return client
+    """A client acting as the signed-in user, subject to RLS.
+
+    The token is set as the Authorization header at construction so *every*
+    sub-client — PostgREST and Storage alike — acts as the user. Setting it only
+    on `client.postgrest` would leave Storage authenticated as anon, and the
+    overlay-write RLS policy (keyed to auth.uid()) would reject the upload.
+    """
+    url, anon_key = _require_project_config()
+    options = AsyncClientOptions(headers={"Authorization": f"Bearer {access_token}"})
+    return await create_async_client(url, anon_key, options)
