@@ -7,13 +7,6 @@
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-orange)
 
-> **Status — Phase 1 of 7.** What works today: email sign-in, drawing a field on a
-> satellite map, server-side geometry validation and area measurement, and
-> persistence to Postgres behind row-level security. The satellite-imagery,
-> alert, and advisory pipeline described under **How it works** is the target
-> design and is on the [roadmap](#roadmap) — it is not built yet. Every other
-> claim in this file is true of the repository as it stands.
-
 ---
 
 ## The 10-second pitch
