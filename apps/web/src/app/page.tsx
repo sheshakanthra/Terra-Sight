@@ -1,23 +1,35 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+
+import SignIn from "@/components/SignIn";
+import Workspace from "@/components/Workspace";
+import { supabase } from "@/lib/supabase";
+
 export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-6 px-6 py-16">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">TerraSight</h1>
-        <p className="mt-3 text-balance text-muted">
-          Satellite-derived field health and plain-language advice for
-          smallholder farms.
-        </p>
-      </div>
+  const [session, setSession] = useState<Session | null>(null);
+  const [checking, setChecking] = useState(true);
 
-      <div className="rounded-lg border border-border bg-surface p-5">
-        <p className="text-sm text-muted">
-          Draw a field, and TerraSight reads recent Sentinel-2 passes through
-          the cloud gaps, tracks NDVI across a 3×3 zone grid, and explains what
-          changed — with the numbers behind every recommendation.
-        </p>
-      </div>
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setChecking(false);
+    });
 
-      <p className="font-mono text-xs text-muted">Phase 0 — scaffold</p>
-    </main>
-  );
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next);
+    });
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  if (checking) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-muted">Loading…</p>
+      </main>
+    );
+  }
+
+  return session ? <Workspace session={session} /> : <SignIn />;
 }

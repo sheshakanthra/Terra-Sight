@@ -1,8 +1,13 @@
 """Typed application configuration, sourced exclusively from the environment."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# apps/api — anchor the env file here so settings do not depend on the working
+# directory the process happens to be launched from.
+API_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -13,8 +18,10 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=API_DIR / ".env",
+        # utf-8-sig tolerates a UTF-8 BOM, which some Windows editors prepend;
+        # plain utf-8 would fold the BOM into the first key and drop it silently.
+        env_file_encoding="utf-8-sig",
         extra="ignore",
     )
 

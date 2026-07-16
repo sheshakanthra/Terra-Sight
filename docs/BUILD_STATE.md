@@ -1,7 +1,7 @@
 # Build State
-current_phase: 1
+current_phase: 2
 status: in_progress
-completed_phases: [0]
+completed_phases: [0, 1]
 decisions_log:
   - 2026-07-15: Phase 0 started on an empty directory; no prior repo state to resume from.
   - 2026-07-15: Pinned Next.js to 15 via create-next-app@15 — `@latest` now installs Next 16, outside the settled stack decision (Appendix B.8).
@@ -9,5 +9,15 @@ decisions_log:
   - 2026-07-15: Credentials typed `str | None` and asserted at point of use, so the API boots and /health answers without Phase 1 secrets.
   - 2026-07-15: Adopted npm workspaces (node_modules hoisted to root); Vercel will target apps/web via its root-directory setting.
   - 2026-07-15: Phase 0 verified green (build, tsc, eslint, ruff, mypy strict, pytest 1/1) and accepted against live processes: /health -> 200, web renders on :3100.
-blockers:
-  - Phase 1 requires real Supabase credentials (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY) on a project with PostGIS enabled. Cannot be self-generated; field persistence and RLS cannot be demonstrated without them.
+  - 2026-07-15: POLICY — the assistant never stages, commits, or pushes, under any identity. Work is left unstaged in the working tree; the user reviews and commits everything manually. Read-only git (status/diff/log/ls-files) stays permitted and is still used to verify no secrets are tracked. This overrides the execution protocol's autonomy directive, which is silent on git writes.
+  - 2026-07-15: POLICY — no Claude attribution in this repository: no Claude author/committer identity and no Co-authored-by trailer in any commit message. Commit a5ad423 (authored "TerraSight Build", carrying a Co-Authored-By: Claude trailer) was amended to 5a02ffd, authored and committed solely by sheshakanthra <sheshakanthra.it2024@citchennai.net> with a clean trailer-free message, and force-pushed to origin/main. Repo identity is pinned via local-only git config; global config was not modified.
+  - 2026-07-16: Anchored the API env file to apps/api via Path(__file__) instead of a bare relative ".env" — pydantic-settings resolves a relative env_file against the process CWD, so a repo-root .env could be loaded (or nothing at all) depending on where uvicorn was launched. Encoding set to utf-8-sig so a Windows-editor BOM cannot silently drop the first variable. Verified: apps/api/.env wins from three different CWDs, root .env ignored, real env vars still override the file (required for the Phase 7 container). Regression tests in tests/test_config.py.
+  - 2026-07-16: Supabase credentials supplied and verified live (service-role key returns HTTP 200 from PostgREST). SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL had been set to the PostgREST endpoint (https://<ref>.supabase.co/rest/v1/) rather than the project base URL, which made every query resolve to /rest/v1/rest/v1/... (HTTP 404). Stripped the suffix in both env files.
+  - 2026-07-16: API authenticates with the caller's own JWT (anon key + Bearer token) rather than the service-role key, so the RLS policies are the real isolation boundary rather than decoration. Service-role is reserved for the Phase 7 unattended cron, which has no user context.
+  - 2026-07-16: Reads go through the fields_geojson view (security_invoker = true) because PostgREST serves geometry columns as WKB hex; the view returns GeoJSON directly while still enforcing RLS as the caller. Writes send EWKT, which PostGIS casts to geometry(Polygon, 4326).
+  - 2026-07-16: FieldCreate.geometry is typed dict[str, Any] rather than a strict Pydantic polygon model, so app.geometry stays the single source of truth for geometry rules and farmer-facing rejection messages; a strict annotation would pre-empt it with a 422 of schema jargon.
+  - 2026-07-16: Chose MapLibre GL + terra-draw (with its official MapLibre adapter, both actively maintained) over @mapbox/mapbox-gl-draw, which needs patching to run on MapLibre. Esri World Imagery as the basemap — field boundaries are invisible on a road map. See BACKLOG for the basemap terms-of-use caveat.
+  - 2026-07-16: Web auth is client-side (@supabase/supabase-js with detectSessionInUrl) rather than @supabase/ssr cookie sessions; the API is a separate origin taking a bearer token, so cookie-based SSR sessions would add moving parts without buying anything yet.
+  - 2026-07-16: user_id on insert is taken from the JWT-verified caller and never from the request body. FieldCreate now sets extra="forbid" so a smuggled user_id fails loudly (422) instead of relying on Pydantic's implicit default of dropping unknown keys. Three independent layers now hold: no user_id field on the model, server-side assignment from the verified token, and the RLS with-check clause. Regression tests in tests/test_fields.py attempt the attack directly.
+  - 2026-07-16: Phase 1 ACCEPTED. Migration applied; after a stale-schema-cache delay PostgREST exposed fields + fields_geojson. Full end-to-end run against live API + live Supabase with two real JWT users: 9/9 checks — empty start, draw+persist, ~25 ha area, persist+reload (the acceptance criterion), GeoJSON geometry round-trip, RLS isolation (user B cannot see user A's field; the list query has no user_id filter, so isolation is purely the DB policy), independent per-user field lists, and friendly 400 on a too-small polygon. Test users cascade-deleted afterward. Gate green: ruff, mypy strict (10 files), pytest 48/48, web typecheck+lint+build, web boots (200, title TerraSight).
+blockers: []

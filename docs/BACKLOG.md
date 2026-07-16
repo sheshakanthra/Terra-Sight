@@ -13,5 +13,9 @@ Nothing here should be built without an explicit scope decision.
 - Mobile app
 
 ## Engineering notes raised during the build
+- Basemap is Esri World Imagery via the public ArcGIS tile endpoint. Fine for
+  development and a demo with attribution, but it is not a licensed production
+  basemap. Before any real launch, either sign up for an Esri key or move to a
+  self-serve alternative.
 - Starlette's `TestClient` emits a deprecation warning asking for `httpx2`.
   Harmless today; revisit if it becomes an error on a future Starlette bump.
