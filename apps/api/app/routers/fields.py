@@ -27,8 +27,10 @@ from app.schemas import (
     ObservationDetail,
     ObservationSummaryResponse,
     RefreshResponse,
+    WeatherResponse,
 )
 from app.supabase_client import SupabaseNotConfiguredError, create_user_client
+from app.weather.client import WeatherError, fetch_weather
 
 logger = logging.getLogger(__name__)
 
@@ -207,10 +209,12 @@ async def refresh(field_id: UUID, user: CurrentUser) -> RefreshResponse:
             detail="Could not reach the satellite catalog. Please try again shortly.",
         ) from exc
 
-    # Rules decide alerts from the freshly-persisted observations. A failure here
-    # must not fail the refresh itself — the imagery is already saved.
+    # Rules decide alerts from the freshly-persisted observations, escalated by
+    # the weather forecast at the field centroid. A failure here must not fail
+    # the refresh itself — the imagery is already saved.
+    centroid = (polygon.centroid.y, polygon.centroid.x)
     try:
-        active_alerts = await evaluate_and_store_alerts(client, str(field_id))
+        active_alerts = await evaluate_and_store_alerts(client, str(field_id), centroid)
     except APIError as exc:
         logger.warning("alert evaluation failed for field %s: %s", field_id, exc.message)
         active_alerts = []
@@ -316,3 +320,33 @@ async def list_alerts(field_id: UUID, user: CurrentUser) -> list[AlertResponse]:
         ) from exc
 
     return [AlertResponse(**row) for row in _as_rows(result.data)]
+
+
+@router.get("/{field_id}/weather", response_model=WeatherResponse)
+async def field_weather(field_id: UUID, user: CurrentUser) -> WeatherResponse:
+    try:
+        client = await create_user_client(user.access_token)
+    except SupabaseNotConfiguredError as exc:
+        raise _UNAVAILABLE from exc
+
+    row = await _load_field_row(client, field_id)
+    try:
+        polygon = shape(row["geometry"])
+    except (ShapelyError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="That field's outline could not be read.",
+        ) from exc
+
+    try:
+        weather = await fetch_weather(polygon.centroid.y, polygon.centroid.x)
+    except WeatherError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach the weather service. Please try again shortly.",
+        ) from exc
+
+    return WeatherResponse(
+        rain_next_7d_mm=weather.rain_next_7d_mm,
+        rain_past_14d_mm=weather.rain_past_14d_mm,
+    )

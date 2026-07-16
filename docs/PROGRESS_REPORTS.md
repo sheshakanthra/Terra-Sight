@@ -55,3 +55,15 @@
   - 17 engine unit tests (types, severities, zero-alert healthy/rising, below-median guard, insufficient data, window cap, zone localization, determinism) + 5 store idempotency tests.
   - Live integration 7/7: the real declining field produced field_decline (medium, 29.4%/38d) + 7 localized zone alerts with evidence; idempotent against the live unique constraint; RLS isolation held.
 - Risks / notes for next phase: Phase 4 (weather) adds Open-Meteo (keyless) at the field centroid and escalates alert severity + tags likely_water_stress when active decline meets a dry 7-day forecast; it writes rain_next_7d_mm into alert evidence, so it will extend the alert-evaluation step (store.py) rather than the imagery pipeline. No new migration needed — evidence is jsonb. Cache weather 6h per field.
+
+## Phase 4 — Weather ✅
+- Shipped: weather module (app/weather/client.py) — Open-Meteo daily precipitation at the field centroid, reduced to rain_past_14d_mm + rain_next_7d_mm, cached 6h in-memory per rounded centroid.
+- Shipped: pure escalation (app/weather/escalation.py) — dry next-7-day forecast (<5mm) on an active decline bumps severity one tier and tags likely_water_stress; rain figures always recorded in evidence.
+- Shipped: escalation wired into evaluate_and_store_alerts (centroid passed from the refresh endpoint); weather failure is non-fatal. Added GET /fields/{id}/weather.
+- Key decisions:
+  - In-memory 6h TTL cache (not a DB table) to avoid a migration; fine for a single long-lived API service. Multi-instance divergence noted in BACKLOG.
+  - Alert.evidence retyped to dict[str, Any] — it is a jsonb bag now carrying trend facts + rain + the water-stress flag.
+- Verification: types ✅ (mypy strict, 22 files) lint ✅ (ruff) tests 119/119 ✅ acceptance ✅
+  - 13 weather unit tests (parsing, escalation dry/wet, severity saturation, threshold boundary, cache hit/expiry).
+  - Live 8/8 vs real Open-Meteo (3.5mm forecast = dry): evidence carries rain_next_7d_mm, severities escalate correctly per each alert's decline % (SW low→medium proved the tier move), likely_water_stress present iff dry, alert rain matches the weather endpoint.
+- Risks / notes for next phase: Phase 5 (advisory) needs a GROQ_API_KEY (present in env, unverified) — build the template fallback first so the product works without the LLM, then wire Groq JSON-mode with the hard prompt rules (reference only supplied alerts, hedge causes, no chemicals/dosages, max 4 items). Alerts now carry rich evidence (decline %, zone, rain, water-stress) for the LLM to phrase and cite.

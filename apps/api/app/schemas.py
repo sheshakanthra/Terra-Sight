@@ -64,6 +64,11 @@ class AlertResponse(BaseModel):
     updated_at: datetime
 
 
+class WeatherResponse(BaseModel):
+    rain_next_7d_mm: float
+    rain_past_14d_mm: float
+
+
 class ObservationDetail(BaseModel):
     date: str
     scene_id: str

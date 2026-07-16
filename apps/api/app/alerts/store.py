@@ -15,6 +15,8 @@ from typing import Any
 from supabase import AsyncClient
 
 from app.alerts.engine import WINDOW_MAX, Alert, ObservationPoint, detect_alerts, zone_label
+from app.weather.client import WeatherError, fetch_weather
+from app.weather.escalation import apply_weather
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +88,28 @@ async def _reconcile(client: AsyncClient, field_id: str, alerts: list[Alert]) ->
         await client.table("alerts").delete().in_("id", stale_ids).execute()
 
 
-async def evaluate_and_store_alerts(client: AsyncClient, field_id: str) -> list[Alert]:
-    """Recompute the field's alerts from its recent observations and persist them."""
+async def evaluate_and_store_alerts(
+    client: AsyncClient,
+    field_id: str,
+    centroid: tuple[float, float] | None = None,
+) -> list[Alert]:
+    """Recompute the field's alerts from its recent observations and persist them.
+
+    When a centroid (lat, lon) is given and there are active alerts, the weather
+    forecast escalates them (dry forecast -> higher severity + likely_water_stress)
+    and records the rain figures in each alert's evidence. A weather failure is
+    non-fatal: the alerts persist unescalated rather than being lost.
+    """
     points = await _load_points(client, field_id)
     alerts = detect_alerts(points)
+
+    if alerts and centroid is not None:
+        lat, lon = centroid
+        try:
+            weather = await fetch_weather(lat, lon)
+            alerts = [apply_weather(alert, weather) for alert in alerts]
+        except WeatherError:
+            logger.warning("weather unavailable for field %s; alerts left unescalated", field_id)
+
     await _reconcile(client, field_id, alerts)
     return alerts

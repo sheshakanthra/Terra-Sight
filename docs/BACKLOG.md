@@ -13,6 +13,10 @@ Nothing here should be built without an explicit scope decision.
 - Mobile app
 
 ## Engineering notes raised during the build
+- Weather cache is in-memory (6h TTL per rounded centroid). Fine for a single
+  long-lived API service, but multiple API instances would each keep their own
+  cache and could diverge / multiply Open-Meteo calls. If the API is ever scaled
+  horizontally, move this to a shared store (Redis or a weather_cache table).
 - Basemap is Esri World Imagery via the public ArcGIS tile endpoint. Fine for
   development and a demo with attribution, but it is not a licensed production
   basemap. Before any real launch, either sign up for an Esri key or move to a

@@ -16,7 +16,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 from datetime import date
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 
@@ -61,7 +61,9 @@ class Alert:
     type: str
     zone: str
     severity: str
-    evidence: dict[str, float | int]
+    # A jsonb evidence bag: numeric trend facts plus, after weather escalation,
+    # rain figures and a likely_water_stress flag.
+    evidence: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -114,7 +116,7 @@ def _detect_decline(dates: list[date], values: list[float]) -> _Decline | None:
     return _Decline(fit_start=fit_start, fit_end=fit_end, fraction=fraction)
 
 
-def _evidence(decline: _Decline, dates: list[date], values: list[float]) -> dict[str, float | int]:
+def _evidence(decline: _Decline, dates: list[date], values: list[float]) -> dict[str, Any]:
     return {
         "start_ndvi": round(decline.fit_start, 4),
         "end_ndvi": round(decline.fit_end, 4),

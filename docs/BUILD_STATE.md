@@ -1,7 +1,7 @@
 # Build State
-current_phase: 4
+current_phase: 5
 status: in_progress
-completed_phases: [0, 1, 2, 3]
+completed_phases: [0, 1, 2, 3, 4]
 decisions_log:
   - 2026-07-15: Phase 0 started on an empty directory; no prior repo state to resume from.
   - 2026-07-15: Pinned Next.js to 15 via create-next-app@15 — `@latest` now installs Next 16, outside the settled stack decision (Appendix B.8).
@@ -34,4 +34,7 @@ decisions_log:
   - 2026-07-16: Added GET /fields/{id}/alerts and active_alerts count on the refresh response. Web display of alerts deferred to Phase 6 (dashboard), per roadmap scope.
   - 2026-07-16: Note for live acceptance: the real acceptance field's NDVI actually declines chronologically (~0.77 on 06-05 down to ~0.51 on 07-13), so a live refresh should generate a real high-severity field_decline alert — not just synthetic. Pending migration 0003.
   - 2026-07-16: Phase 3 ACCEPTED. Unit-test acceptance green (17 engine + 5 store). Live integration (real API + Supabase + Sentinel-2) 7/7: the real declining field (~0.82->0.58 fitted) generated a field_decline (medium, 29.4%/38d) plus 7 localized zone_decline alerts (NW/N/NE/E/SE high, S medium, SW low; centre correctly silent), each with numeric evidence (decline_pct, start/end NDVI, window_days); idempotent re-evaluation did not duplicate against the live unique constraint; RLS isolation held (B 404 on A's alerts). Migration 0003 applied clean. Gate: ruff, mypy strict (19 files), pytest 106/106.
+  - 2026-07-16: Phase 4 weather built (app/weather/). Open-Meteo (keyless) daily precipitation at the field centroid: 14 past days + 7 forecast days -> rain_past_14d_mm, rain_next_7d_mm. 6h in-memory TTL cache keyed by centroid rounded to 2 dp (~1km). Chose in-memory over a weather_cache table to avoid a migration; acceptable since the API is one long-lived service (Phase 7). Multi-instance divergence noted for BACKLOG (Redis/table if it ever matters).
+  - 2026-07-16: Escalation (app/weather/escalation.py, pure): active decline + rain_next_7d < 5mm -> severity bumped one tier (low->medium->high, high saturates) and evidence tagged likely_water_stress=true; rain figures written to evidence regardless (no migration — evidence is jsonb). Runs in evaluate_and_store_alerts after detect_alerts, only when there are alerts and a centroid is supplied; weather failure is non-fatal (alerts persist unescalated). Alert.evidence retyped dict[str,Any] (jsonb bag). Added GET /fields/{id}/weather.
+  - 2026-07-16: Phase 4 ACCEPTED. 13 weather unit tests (parse split/None/bad-shape, escalation dry/wet, severity saturation, threshold boundary, cache hit/expiry). Live 8/8 against real Open-Meteo: forecast 3.5mm (DRY), every alert evidence carries rain_next_7d_mm, severities escalate correctly vs each alert's own decline % (SW low->medium confirmed the tier move), likely_water_stress present iff dry, alert rain matches the weather endpoint. Gate: ruff, mypy strict (22 files), pytest 119/119. No migration, no web change (weather strip is Phase 6).
 blockers: []
