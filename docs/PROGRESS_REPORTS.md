@@ -67,3 +67,13 @@
   - 13 weather unit tests (parsing, escalation dry/wet, severity saturation, threshold boundary, cache hit/expiry).
   - Live 8/8 vs real Open-Meteo (3.5mm forecast = dry): evidence carries rain_next_7d_mm, severities escalate correctly per each alert's decline % (SW low→medium proved the tier move), likely_water_stress present iff dry, alert rain matches the weather endpoint.
 - Risks / notes for next phase: Phase 5 (advisory) needs a GROQ_API_KEY (present in env, unverified) — build the template fallback first so the product works without the LLM, then wire Groq JSON-mode with the hard prompt rules (reference only supplied alerts, hedge causes, no chemicals/dosages, max 4 items). Alerts now carry rich evidence (decline %, zone, rain, water-stress) for the LLM to phrase and cite.
+
+## Phase 5 — Advisory ✅
+- Shipped: app/advisory/ — deterministic template (source of truth + fallback), Groq JSON-mode phrasing (llama-3.3-70b-versatile), a hard-rule safety validator, and an LLM-then-fallback service. POST /fields/{id}/advice with optional crop; response reports which path produced it.
+- Key decisions:
+  - Template-first (B.7): the product works with zero LLM. No-alert fields never call the LLM (can't invent tasks).
+  - Safety is enforced, not just prompted: naming any chemical/dose, citing an unsupplied alert, or an ungrounded item rejects the whole LLM batch and falls back to the clean template.
+  - GROQ_API_KEY verified working live (source=LLM in the demo).
+- Verification: types ✅ (mypy strict, 28 files) lint ✅ (ruff) tests 146/146 ✅ acceptance ✅
+  - 27 advisory unit tests. Live demo on the real 29.4% field_decline: Groq output passed all 6 hard-rule checks (max 4, only supplied refs, grounded, no chemicals/dosages, hedged, cites real numbers); template fallback (Groq disabled) produced equivalent clean advice on the same alert.
+- Risks / notes for next phase: Phase 6 (dashboard) is web-only — NDVI overlay + date scrubber, 3x3 zone grid with trend arrows, NDVI time-series (Recharts), weather strip, ranked action list with expandable evidence, and the "last clear pass: N days ago" honesty badge. All backing endpoints exist: /observations (dates, stats, zonal, overlay_url+bounds), /alerts, /weather, POST /advice. Add Recharts to apps/web. No API change or migration expected.

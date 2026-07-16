@@ -1,7 +1,7 @@
 """Request and response models for the public API."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -67,6 +67,26 @@ class AlertResponse(BaseModel):
 class WeatherResponse(BaseModel):
     rain_next_7d_mm: float
     rain_past_14d_mm: float
+
+
+class AdviceRequest(BaseModel):
+    # Optional free-text crop name, e.g. "rice" or "sugarcane".
+    crop: str | None = Field(default=None, max_length=80)
+
+
+class AdviceItem(BaseModel):
+    priority: int
+    action: str
+    reason: str
+    # References to the alerts this item is grounded in, e.g. "field_decline:field".
+    evidence_refs: list[str]
+
+
+class AdviceResponse(BaseModel):
+    # Which path produced the advice — "llm" or the deterministic "template".
+    source: Literal["llm", "template"]
+    crop: str | None
+    items: list[AdviceItem]
 
 
 class ObservationDetail(BaseModel):

@@ -14,6 +14,8 @@ from postgrest.exceptions import APIError
 from shapely.errors import ShapelyError
 from shapely.geometry import mapping, shape
 
+from app.advisory.inputs import AlertFact
+from app.advisory.service import generate_advice
 from app.alerts.store import evaluate_and_store_alerts
 from app.auth import CurrentUser
 from app.config import get_settings
@@ -21,6 +23,8 @@ from app.geometry import GeometryError, validate_and_measure
 from app.imagery.pipeline import OVERLAY_BUCKET, refresh_field
 from app.imagery.stac import StacError
 from app.schemas import (
+    AdviceRequest,
+    AdviceResponse,
     AlertResponse,
     FieldCreate,
     FieldResponse,
@@ -320,6 +324,53 @@ async def list_alerts(field_id: UUID, user: CurrentUser) -> list[AlertResponse]:
         ) from exc
 
     return [AlertResponse(**row) for row in _as_rows(result.data)]
+
+
+@router.post("/{field_id}/advice", response_model=AdviceResponse)
+async def field_advice(
+    field_id: UUID, payload: AdviceRequest, user: CurrentUser
+) -> AdviceResponse:
+    settings = get_settings()
+    try:
+        client = await create_user_client(user.access_token)
+    except SupabaseNotConfiguredError as exc:
+        raise _UNAVAILABLE from exc
+
+    row = await _load_field_row(client, field_id)
+
+    # Active alerts are the only grounding for advice — nothing else can be cited.
+    try:
+        result = (
+            await client.table("alerts")
+            .select("zone,type,severity,evidence")
+            .eq("field_id", str(field_id))
+            .execute()
+        )
+    except APIError as exc:
+        logger.warning("advice alert load failed: %s", exc.message)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Advice could not be prepared.",
+        ) from exc
+
+    alerts = [
+        AlertFact(
+            type=r["type"], zone=r["zone"], severity=r["severity"], evidence=r["evidence"]
+        )
+        for r in _as_rows(result.data)
+    ]
+
+    # Weather adds context for the LLM; best-effort, never blocks advice.
+    weather = None
+    if alerts:
+        try:
+            polygon = shape(row["geometry"])
+            weather = await fetch_weather(polygon.centroid.y, polygon.centroid.x)
+        except (ShapelyError, KeyError, TypeError, ValueError, WeatherError) as exc:
+            logger.info("weather unavailable for advice on field %s: %s", field_id, exc)
+
+    source, items = await generate_advice(alerts, weather, payload.crop, settings.groq_api_key)
+    return AdviceResponse(source=source, crop=payload.crop, items=items)
 
 
 @router.get("/{field_id}/weather", response_model=WeatherResponse)

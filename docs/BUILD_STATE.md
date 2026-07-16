@@ -1,7 +1,7 @@
 # Build State
-current_phase: 5
+current_phase: 6
 status: in_progress
-completed_phases: [0, 1, 2, 3, 4]
+completed_phases: [0, 1, 2, 3, 4, 5]
 decisions_log:
   - 2026-07-15: Phase 0 started on an empty directory; no prior repo state to resume from.
   - 2026-07-15: Pinned Next.js to 15 via create-next-app@15 — `@latest` now installs Next 16, outside the settled stack decision (Appendix B.8).
@@ -37,4 +37,6 @@ decisions_log:
   - 2026-07-16: Phase 4 weather built (app/weather/). Open-Meteo (keyless) daily precipitation at the field centroid: 14 past days + 7 forecast days -> rain_past_14d_mm, rain_next_7d_mm. 6h in-memory TTL cache keyed by centroid rounded to 2 dp (~1km). Chose in-memory over a weather_cache table to avoid a migration; acceptable since the API is one long-lived service (Phase 7). Multi-instance divergence noted for BACKLOG (Redis/table if it ever matters).
   - 2026-07-16: Escalation (app/weather/escalation.py, pure): active decline + rain_next_7d < 5mm -> severity bumped one tier (low->medium->high, high saturates) and evidence tagged likely_water_stress=true; rain figures written to evidence regardless (no migration — evidence is jsonb). Runs in evaluate_and_store_alerts after detect_alerts, only when there are alerts and a centroid is supplied; weather failure is non-fatal (alerts persist unescalated). Alert.evidence retyped dict[str,Any] (jsonb bag). Added GET /fields/{id}/weather.
   - 2026-07-16: Phase 4 ACCEPTED. 13 weather unit tests (parse split/None/bad-shape, escalation dry/wet, severity saturation, threshold boundary, cache hit/expiry). Live 8/8 against real Open-Meteo: forecast 3.5mm (DRY), every alert evidence carries rain_next_7d_mm, severities escalate correctly vs each alert's own decline % (SW low->medium confirmed the tier move), likely_water_stress present iff dry, alert rain matches the weather endpoint. Gate: ruff, mypy strict (22 files), pytest 119/119. No migration, no web change (weather strip is Phase 6).
+  - 2026-07-16: Phase 5 advisory built (app/advisory/). Template-first per B.7: build_template_advice (deterministic, cites evidence numbers, hedged, no chemicals, max 4, no-alert -> single 'No action needed') is the source of truth AND the fallback. Groq layer (llama-3.3-70b-versatile, JSON mode, 20s timeout) only phrases. safety.validate_llm_items is a hard backstop: any prohibited chemical/dose (regex + name blocklist), any ref not in the supplied alerts, or any ungrounded/malformed item rejects the whole batch -> template. Service order: no alerts -> template no-action (never calls LLM); else try LLM, validate, else template. POST /fields/{id}/advice with optional crop; returns source ('llm'|'template').
+  - 2026-07-16: Phase 5 ACCEPTED. 27 advisory unit tests (template citing/hedging/no-chemicals/cap4/no-action, prohibited detection, validator rejects unsupplied-ref/chemical/ungrounded + truncates, service LLM-vs-fallback both directions). Live demo on the real field_decline (high, 29.4%, dry): Path 1 POST /advice used real Groq (source=LLM) and passed all 6 hard-rule checks on actual output (cited 0.8244->0.5131 = start + current_ndvi, both real evidence fields; 29.4% exact). Path 2 (api_key=None) produced clean template advice on the same alerts, all rules PASS. Gate: ruff, mypy strict (28 files), pytest 146/146. No migration. Web advice UI is Phase 6.
 blockers: []
