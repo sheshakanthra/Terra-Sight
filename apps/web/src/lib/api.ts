@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { Field, PolygonGeometry } from "@/lib/types";
+import type { Field, PolygonGeometry, RefreshResult } from "@/lib/types";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -65,4 +65,9 @@ export async function createField(
     body: JSON.stringify({ name, geometry }),
   });
   return (await response.json()) as Field;
+}
+
+export async function refreshField(id: string): Promise<RefreshResult> {
+  const response = await authorizedFetch(`/fields/${id}/refresh`);
+  return (await response.json()) as RefreshResult;
 }

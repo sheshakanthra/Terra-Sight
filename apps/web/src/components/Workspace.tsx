@@ -4,9 +4,9 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
-import { ApiError, createField, listFields } from "@/lib/api";
+import { ApiError, createField, listFields, refreshField } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import type { Field, PolygonGeometry } from "@/lib/types";
+import type { Field, NdviOverlay, PolygonGeometry } from "@/lib/types";
 
 // MapLibre touches `window` at module scope, so it cannot be server-rendered.
 const FieldMap = dynamic(() => import("@/components/FieldMap"), {
@@ -26,6 +26,9 @@ export default function Workspace({ session }: WorkspaceProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [overlay, setOverlay] = useState<NdviOverlay | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -73,6 +76,33 @@ export default function Workspace({ session }: WorkspaceProps) {
     setName("");
     setError(null);
     setDrawing(false);
+  }
+
+  async function handleRefresh(field: Field) {
+    setRefreshingId(field.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await refreshField(field.id);
+      const latest = result.observations[0];
+      if (latest) {
+        setOverlay({ url: latest.overlay_url, bounds: latest.bounds_wgs84 });
+        setNotice(
+          `${field.name}: ${result.valid_dates} clear date${result.valid_dates === 1 ? "" : "s"} ` +
+            `in the last 45 days. Showing ${latest.date} (median NDVI ${latest.median_ndvi.toFixed(2)}).`,
+        );
+      } else {
+        setOverlay(null);
+        setNotice(
+          `${field.name}: no clear satellite pass in the last 45 days ` +
+            `(${result.scenes_found} scene${result.scenes_found === 1 ? "" : "s"} found, all too cloudy).`,
+        );
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Refresh failed. Please try again.");
+    } finally {
+      setRefreshingId(null);
+    }
   }
 
   return (
@@ -146,6 +176,12 @@ export default function Workspace({ session }: WorkspaceProps) {
           </p>
         )}
 
+        {notice && (
+          <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+            {notice}
+          </p>
+        )}
+
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           <h2 className="text-xs font-medium uppercase tracking-wide text-muted">
             Your fields {fields.length > 0 && `(${fields.length})`}
@@ -161,12 +197,21 @@ export default function Workspace({ session }: WorkspaceProps) {
               {fields.map((field) => (
                 <li
                   key={field.id}
-                  className="rounded-md border border-border bg-surface px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2"
                 >
-                  <p className="truncate text-sm font-medium">{field.name}</p>
-                  <p className="font-mono text-xs text-muted">
-                    {field.area_ha.toFixed(2)} ha
-                  </p>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{field.name}</p>
+                    <p className="font-mono text-xs text-muted">
+                      {field.area_ha.toFixed(2)} ha
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void handleRefresh(field)}
+                    disabled={refreshingId !== null}
+                    className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-50"
+                  >
+                    {refreshingId === field.id ? "Reading…" : "Refresh"}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -175,7 +220,12 @@ export default function Workspace({ session }: WorkspaceProps) {
       </aside>
 
       <div className="min-h-0 flex-1">
-        <FieldMap fields={fields} drawing={drawing} onPolygonDrawn={handlePolygonDrawn} />
+        <FieldMap
+          fields={fields}
+          drawing={drawing}
+          overlay={overlay}
+          onPolygonDrawn={handlePolygonDrawn}
+        />
       </div>
     </main>
   );

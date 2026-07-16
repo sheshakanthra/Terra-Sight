@@ -35,3 +35,29 @@ class FieldResponse(BaseModel):
     area_ha: float
     created_at: datetime
     geometry: dict[str, Any]
+
+
+class ObservationSummaryResponse(BaseModel):
+    date: str
+    scene_id: str
+    valid_pct: float
+    median_ndvi: float
+    overlay_url: str
+    # (west, south, east, north) in EPSG:4326 — the extent to pin the overlay to.
+    bounds_wgs84: tuple[float, float, float, float]
+
+
+class RefreshResponse(BaseModel):
+    scenes_found: int
+    dates_processed: int
+    valid_dates: int
+    observations: list[ObservationSummaryResponse]
+
+
+class ObservationDetail(BaseModel):
+    date: str
+    scene_id: str
+    valid_pct: float
+    stats: dict[str, Any]
+    zonal: list[dict[str, Any]]
+    overlay_url: str | None

@@ -6,13 +6,15 @@ import { TerraDraw, TerraDrawPolygonMode } from "terra-draw";
 import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { Field, PolygonGeometry } from "@/lib/types";
+import type { Field, NdviOverlay, PolygonGeometry } from "@/lib/types";
 
 /** Thanjavur delta — dense smallholder cropland, and a sane place to land. */
 const INITIAL_CENTER: [number, number] = [79.13, 10.79];
 const INITIAL_ZOOM = 13;
 
 const FIELDS_SOURCE = "saved-fields";
+const OVERLAY_SOURCE = "ndvi-overlay";
+const OVERLAY_LAYER = "ndvi-overlay-layer";
 
 /**
  * Satellite imagery, not a street map: field boundaries are invisible on a
@@ -49,10 +51,16 @@ function toFeatureCollection(fields: Field[]) {
 interface FieldMapProps {
   fields: Field[];
   drawing: boolean;
+  overlay: NdviOverlay | null;
   onPolygonDrawn: (geometry: PolygonGeometry) => void;
 }
 
-export default function FieldMap({ fields, drawing, onPolygonDrawn }: FieldMapProps) {
+export default function FieldMap({
+  fields,
+  drawing,
+  overlay,
+  onPolygonDrawn,
+}: FieldMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const draw = useRef<TerraDraw | null>(null);
@@ -123,6 +131,36 @@ export default function FieldMap({ fields, drawing, onPolygonDrawn }: FieldMapPr
     const source = map.current?.getSource(FIELDS_SOURCE) as maplibregl.GeoJSONSource | undefined;
     source?.setData(toFeatureCollection(fields));
   }, [fields, ready]);
+
+  // Pin the NDVI overlay image to its geographic bounds. Re-added on change
+  // because an image source's coordinates are fixed at creation.
+  useEffect(() => {
+    const instance = map.current;
+    if (!ready || !instance) return;
+
+    if (instance.getLayer(OVERLAY_LAYER)) instance.removeLayer(OVERLAY_LAYER);
+    if (instance.getSource(OVERLAY_SOURCE)) instance.removeSource(OVERLAY_SOURCE);
+    if (!overlay) return;
+
+    const [west, south, east, north] = overlay.bounds;
+    instance.addSource(OVERLAY_SOURCE, {
+      type: "image",
+      url: overlay.url,
+      coordinates: [
+        [west, north],
+        [east, north],
+        [east, south],
+        [west, south],
+      ],
+    });
+    // Drawn above the field outline so the health colours read clearly.
+    instance.addLayer({
+      id: OVERLAY_LAYER,
+      type: "raster",
+      source: OVERLAY_SOURCE,
+      paint: { "raster-opacity": 0.85, "raster-resampling": "nearest" },
+    });
+  }, [overlay, ready]);
 
   // Toggle drawing. "static" is terra-draw's inert mode: the map still pans,
   // but clicks no longer start a polygon.
