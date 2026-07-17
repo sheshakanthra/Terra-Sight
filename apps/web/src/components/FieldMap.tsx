@@ -6,7 +6,7 @@ import { TerraDraw, TerraDrawPolygonMode } from "terra-draw";
 import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { Field, NdviOverlay, PolygonGeometry } from "@/lib/types";
+import type { Bounds, Field, NdviOverlay, PolygonGeometry } from "@/lib/types";
 
 /** Thanjavur delta — dense smallholder cropland, and a sane place to land. */
 const INITIAL_CENTER: [number, number] = [79.13, 10.79];
@@ -52,6 +52,8 @@ interface FieldMapProps {
   fields: Field[];
   drawing: boolean;
   overlay: NdviOverlay | null;
+  /** When set, the map flies to frame this extent (west, south, east, north). */
+  focusBounds?: Bounds | null;
   onPolygonDrawn: (geometry: PolygonGeometry) => void;
 }
 
@@ -59,6 +61,7 @@ export default function FieldMap({
   fields,
   drawing,
   overlay,
+  focusBounds,
   onPolygonDrawn,
 }: FieldMapProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -161,6 +164,19 @@ export default function FieldMap({
       paint: { "raster-opacity": 0.85, "raster-resampling": "nearest" },
     });
   }, [overlay, ready]);
+
+  // Frame the selected field when asked.
+  useEffect(() => {
+    if (!ready || !map.current || !focusBounds) return;
+    const [west, south, east, north] = focusBounds;
+    map.current.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      { padding: 48, duration: 600, maxZoom: 16 },
+    );
+  }, [focusBounds, ready]);
 
   // Toggle drawing. "static" is terra-draw's inert mode: the map still pans,
   // but clicks no longer start a polygon.

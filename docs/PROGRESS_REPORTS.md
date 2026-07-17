@@ -77,3 +77,13 @@
 - Verification: types ✅ (mypy strict, 28 files) lint ✅ (ruff) tests 146/146 ✅ acceptance ✅
   - 27 advisory unit tests. Live demo on the real 29.4% field_decline: Groq output passed all 6 hard-rule checks (max 4, only supplied refs, grounded, no chemicals/dosages, hedged, cites real numbers); template fallback (Groq disabled) produced equivalent clean advice on the same alert.
 - Risks / notes for next phase: Phase 6 (dashboard) is web-only — NDVI overlay + date scrubber, 3x3 zone grid with trend arrows, NDVI time-series (Recharts), weather strip, ranked action list with expandable evidence, and the "last clear pass: N days ago" honesty badge. All backing endpoints exist: /observations (dates, stats, zonal, overlay_url+bounds), /alerts, /weather, POST /advice. Add Recharts to apps/web. No API change or migration expected.
+
+## Phase 6 — Dashboard ✅
+- Shipped: full field dashboard (apps/web/src/components/dashboard/) — health map with georeferenced NDVI overlay + date scrubber, 3x3 zone health matrix (NDVI-ramp fill + trend arrows), NDVI time-series (Recharts, median + p10/p90 spread + active-date dot), rainfall strip, ranked advice with expandable evidence chips + AI/rule source badge, and the "last clear pass N days ago" honesty badge. Workspace now selects a field to open its dashboard; drawing flow preserved.
+- Shipped: migration 0004 (observations.bounds jsonb) + pipeline/schema plumbing so historical overlays can be pinned.
+- Key decisions:
+  - Instrument-readout aesthetic (mono tabular numbers, uppercase microlabels, dark panels) within the settled dark/semantic constraint; NDVI ramp shared by overlay, scrubber, and zone grid (lib/ndvi.ts matches the backend PNG). Calibrated via frontend-design skill.
+  - Migration 0004 was needed after all: overlay bounds can't be reproduced client-side, so the scrubber needs them persisted.
+- Verification: types ✅ (tsc) lint ✅ (eslint) build ✅ (next build) acceptance ✅
+  - Drove the real UI headless (Playwright + WebGL) against live API+Supabase+Sentinel-2, session seeded via localStorage. 8/8 checks + screenshot showing the full loop: map overlay, 6-pass scrubber, zone matrix with E/SE stressed, declining time-series, dry rainfall, honesty badge, AI advice citing 29.4% decline.
+- Risks / notes for next phase: Phase 7 (ship) — Vercel (web) + Render (API in Docker; GDAL wheels are fragile so containerize), a daily cron refreshing all fields, README polish + demo GIF. Needs deployment credentials/decisions from the user (Vercel + Render accounts, prod Supabase, prod env, CORS origin = prod web URL). The API's WEB_ORIGIN must be set to the deployed web origin (currently localhost). Consider a /refresh-all cron endpoint guarded by a secret for the daily job.

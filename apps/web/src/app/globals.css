@@ -32,3 +32,26 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Instrument-readout microlabel: uppercase mono, used for every data caption so
+   the UI reads like a sensor panel. */
+.readout {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

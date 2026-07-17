@@ -268,7 +268,7 @@ async def list_observations(field_id: UUID, user: CurrentUser) -> list[Observati
     try:
         result = (
             await client.table("observations")
-            .select("date,scene_id,valid_pct,stats,zonal,overlay_path")
+            .select("date,scene_id,valid_pct,stats,zonal,overlay_path,bounds")
             .eq("field_id", str(field_id))
             .order("date", desc=True)
             .execute()
@@ -285,6 +285,7 @@ async def list_observations(field_id: UUID, user: CurrentUser) -> list[Observati
     for row in _as_rows(result.data):
         path = row.get("overlay_path")
         url = f"{base}/storage/v1/object/public/{OVERLAY_BUCKET}/{path}" if path and base else None
+        bounds = row.get("bounds")
         observations.append(
             ObservationDetail(
                 date=str(row["date"]),
@@ -293,6 +294,7 @@ async def list_observations(field_id: UUID, user: CurrentUser) -> list[Observati
                 stats=row["stats"],
                 zonal=row["zonal"],
                 overlay_url=url,
+                bounds=bounds if isinstance(bounds, list) else None,
             )
         )
     return observations

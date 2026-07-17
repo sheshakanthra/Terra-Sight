@@ -1,5 +1,13 @@
 import { supabase } from "@/lib/supabase";
-import type { Field, PolygonGeometry, RefreshResult } from "@/lib/types";
+import type {
+  Advice,
+  Alert,
+  Field,
+  Observation,
+  PolygonGeometry,
+  RefreshResult,
+  Weather,
+} from "@/lib/types";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -70,4 +78,27 @@ export async function createField(
 export async function refreshField(id: string): Promise<RefreshResult> {
   const response = await authorizedFetch(`/fields/${id}/refresh`);
   return (await response.json()) as RefreshResult;
+}
+
+export async function listObservations(id: string): Promise<Observation[]> {
+  const response = await authorizedFetch(`/fields/${id}/observations`);
+  return (await response.json()) as Observation[];
+}
+
+export async function listAlerts(id: string): Promise<Alert[]> {
+  const response = await authorizedFetch(`/fields/${id}/alerts`);
+  return (await response.json()) as Alert[];
+}
+
+export async function getWeather(id: string): Promise<Weather> {
+  const response = await authorizedFetch(`/fields/${id}/weather`);
+  return (await response.json()) as Weather;
+}
+
+export async function getAdvice(id: string, crop?: string): Promise<Advice> {
+  const response = await authorizedFetch(`/fields/${id}/advice`, {
+    method: "POST",
+    body: JSON.stringify({ crop: crop || null }),
+  });
+  return (await response.json()) as Advice;
 }

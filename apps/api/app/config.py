@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     supabase_anon_key: str | None = None
     groq_api_key: str | None = None
 
+    # Shared secret guarding the daily refresh-all cron endpoint.
+    cron_secret: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

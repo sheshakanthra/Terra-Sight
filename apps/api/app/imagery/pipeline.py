@@ -139,6 +139,7 @@ async def _persist(
         "zonal": analysis.zonal,
         "valid_pct": analysis.valid_pct,
         "overlay_path": path,
+        "bounds": list(analysis.bounds_wgs84),
     }
     await client.table("observations").upsert(record, on_conflict="field_id,date").execute()
 

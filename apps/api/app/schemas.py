@@ -96,3 +96,5 @@ class ObservationDetail(BaseModel):
     stats: dict[str, Any]
     zonal: list[dict[str, Any]]
     overlay_url: str | None
+    # (west, south, east, north) in EPSG:4326; null for pre-0004 rows.
+    bounds: list[float] | None

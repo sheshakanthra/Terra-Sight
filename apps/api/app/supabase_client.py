@@ -42,3 +42,18 @@ async def create_user_client(access_token: str) -> AsyncClient:
     url, anon_key = _require_project_config()
     options = AsyncClientOptions(headers={"Authorization": f"Bearer {access_token}"})
     return await create_async_client(url, anon_key, options)
+
+
+async def create_service_client() -> AsyncClient:
+    """A service-role client that bypasses RLS — for unattended jobs only.
+
+    Reserved for the daily cron, which must read and refresh every field across
+    all users. Never use this to handle a user request; user requests act as the
+    user so the RLS policies apply.
+    """
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        raise SupabaseNotConfiguredError(
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in apps/api/.env"
+        )
+    return await create_async_client(settings.supabase_url, settings.supabase_service_role_key)

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import get_settings
-from app.routers import fields, health
+from app.routers import fields, health, internal
 
 
 def create_app() -> FastAPI:
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(fields.router)
+    app.include_router(internal.router)
     return app
 
 
