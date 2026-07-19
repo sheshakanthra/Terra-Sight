@@ -190,10 +190,12 @@ cd apps/api && ruff check . && mypy app && pytest           # api
 - **Web → Vercel.** Import the repo, set the root directory to `apps/web`, and
   add the `NEXT_PUBLIC_*` env vars.
 - **API → Render.** The [`render.yaml`](render.yaml) blueprint builds
-  [`apps/api/Dockerfile`](apps/api/Dockerfile) and provisions a daily cron that
-  refreshes every field via a secret-guarded `/internal/refresh-all` endpoint.
-  Set `WEB_ORIGIN` to the deployed web origin, plus the Supabase and Groq
-  secrets.
+  [`apps/api/Dockerfile`](apps/api/Dockerfile). Set `WEB_ORIGIN` to the deployed
+  web origin, plus the Supabase and Groq secrets.
+- **Daily refresh → GitHub Actions.** A free scheduled workflow
+  ([`.github/workflows/daily-refresh.yml`](.github/workflows/daily-refresh.yml))
+  calls the secret-guarded `/internal/refresh-all` endpoint once a day — Render's
+  cron service type needs a paid plan, this stays on free tier.
 
 The GDAL/rasterio wheels are why the API is containerised rather than run as a
 serverless function.

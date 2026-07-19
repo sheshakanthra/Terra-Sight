@@ -1,7 +1,12 @@
-# Render blueprint for the TerraSight API (Docker) + daily refresh cron.
+# Render blueprint for the TerraSight API (Docker).
 #
 # Import via Render → New → Blueprint, pointing at this repo. Secrets marked
-# sync:false must be filled in the Render dashboard after the first deploy.
+# sync:false must be filled in the Render dashboard.
+#
+# The daily refresh is NOT a Render cron (that service type needs a paid plan).
+# Instead a free GitHub Actions schedule calls the secret-guarded
+# /internal/refresh-all endpoint — see .github/workflows/daily-refresh.yml.
+# Set the SAME CRON_SECRET value here and in the repo's GitHub Actions secrets.
 
 services:
   # ---- FastAPI raster service (Docker) ----------------------------------
@@ -26,32 +31,6 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      # Same value as the GitHub Actions CRON_SECRET secret.
       - key: CRON_SECRET
-        generateValue: true
-
-  # ---- Daily refresh cron ----------------------------------------------
-  # Reuses the API image; instead of the server it runs a one-shot POST to the
-  # secret-guarded refresh-all endpoint. httpx ships in the image, so no curl.
-  - type: cron
-    name: terrasight-daily-refresh
-    runtime: docker
-    dockerfilePath: ./apps/api/Dockerfile
-    dockerContext: ./apps/api
-    plan: free
-    schedule: "0 2 * * *" # 02:00 UTC daily
-    dockerCommand: >-
-      python -c "import os,httpx;
-      r=httpx.post('https://'+os.environ['API_HOST']+'/internal/refresh-all',
-      headers={'X-Cron-Secret':os.environ['CRON_SECRET']}, timeout=1800);
-      print(r.status_code, r.text); r.raise_for_status()"
-    envVars:
-      - key: API_HOST
-        fromService:
-          type: web
-          name: terrasight-api
-          property: host
-      - key: CRON_SECRET
-        fromService:
-          type: web
-          name: terrasight-api
-          envVarKey: CRON_SECRET
+        sync: false

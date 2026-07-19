@@ -1,0 +1,29 @@
+name: Daily field refresh
+
+# Free alternative to a paid Render cron: a scheduled GitHub Action calls the
+# secret-guarded refresh-all endpoint once a day. Needs two repo secrets
+# (Settings → Secrets and variables → Actions):
+#   API_BASE_URL  e.g. https://terrasight-api.onrender.com   (no trailing slash)
+#   CRON_SECRET   the same value set on the Render API service
+on:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC daily
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger refresh-all
+        run: |
+          echo "Calling refresh-all…"
+          # --max-time covers many fields; --retry rides out a Render cold start.
+          code=$(curl -sS -o /tmp/out.txt -w "%{http_code}" \
+            --max-time 1800 --retry 3 --retry-connrefused --retry-delay 20 \
+            -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.API_BASE_URL }}/internal/refresh-all")
+          echo "HTTP $code"
+          cat /tmp/out.txt
+          echo
+          test "$code" = "200"
