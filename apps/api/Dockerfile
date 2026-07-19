@@ -12,6 +12,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# The rasterio/pyproj wheels bundle GDAL/PROJ/GEOS but still rely on a few base
+# system libraries the slim image omits: libexpat1 (GDAL's XML parsing) and
+# ca-certificates (GDAL reads the Cloud-Optimized GeoTIFFs over HTTPS via its
+# own curl, which needs the system CA bundle).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libexpat1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencies first for layer caching.
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
